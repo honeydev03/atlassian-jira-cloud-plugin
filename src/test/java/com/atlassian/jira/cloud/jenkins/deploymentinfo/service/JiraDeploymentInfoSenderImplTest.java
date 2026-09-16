@@ -31,6 +31,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import javax.annotation.Nullable;
@@ -66,17 +67,23 @@ public class JiraDeploymentInfoSenderImplTest {
             new JiraCloudSiteConfig(
                     SITE2, "https://webhook.url?jenkins_server_uuid=bar", "credsId2");
 
-    @Mock private JiraSiteConfigRetriever siteConfigRetriever;
+    @Mock
+    private JiraSiteConfigRetriever siteConfigRetriever;
 
-    @Mock private SecretRetriever secretRetriever;
+    @Mock
+    private SecretRetriever secretRetriever;
 
-    @Mock private CloudIdResolver cloudIdResolver;
+    @Mock
+    private CloudIdResolver cloudIdResolver;
 
-    @Mock private DeploymentsApi deploymentsApi;
+    @Mock
+    private DeploymentsApi deploymentsApi;
 
-    @Mock private IssueKeyExtractor issueKeyExtractor;
+    @Mock
+    private IssueKeyExtractor issueKeyExtractor;
 
-    @Mock private RunWrapperProvider runWrapperProvider;
+    @Mock
+    private RunWrapperProvider runWrapperProvider;
 
     private JiraDeploymentInfoSender classUnderTest;
 
@@ -395,6 +402,22 @@ public class JiraDeploymentInfoSenderImplTest {
         verify(mockWorkflowRun, times(1)).getResult();
     }
 
+    // https://github.com/jenkinsci/atlassian-jira-software-cloud-plugin/issues/77
+    @Test
+    public void testSendDeploymentInfo_whenResponseContainsNull() {
+        // given
+        setupDeploymentsApiResponseWithNullValues();
+        when(issueKeyExtractor.extractIssueKeys(any())).thenReturn(ImmutableSet.of("FOO-123"));
+        JiraDeploymentInfoRequest request = createRequest();
+        final WorkflowRun mockWorkflowRun = request.getDeployment();
+
+        // when
+        classUnderTest.sendDeploymentInfo(request).get(0);
+
+        // then
+        verify(mockWorkflowRun, times(1)).getResult();
+    }
+
     private JiraDeploymentInfoRequest createRequest() {
         return createRequestWithGating(SITE, Collections.emptySet(), false);
     }
@@ -505,6 +528,15 @@ public class JiraDeploymentInfoSenderImplTest {
     private void setupDeploymentsApiFailure() {
         when(deploymentsApi.sendDeploymentAsJwt(any(), any(), any(), any()))
                 .thenThrow(new ApiUpdateFailedException("Error"));
+    }
+
+    private void setupDeploymentsApiResponseWithNullValues() {
+        DeploymentApiResponse response = Mockito.mock(DeploymentApiResponse.class);
+        when(response.getAcceptedDeployments()).thenReturn(null);
+        when(response.getAcceptedDeployments()).thenReturn(null);
+        when(response.getUnknownAssociations()).thenReturn(null);
+        when(deploymentsApi.sendDeploymentAsJwt(any(), any(), any()))
+                .thenReturn(response);
     }
 
     private void setupDeploymentsApiDeploymentAccepted() {
